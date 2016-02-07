@@ -1,0 +1,121 @@
+---
+title: "HW3_Margaret_Walker"
+author: "Margaret Walker"
+date: "February 6, 2016"
+output: pdf_document
+---
+
+1.  1. Carry out an exploratory analysis using the tree dataset. 
+Develop and compare models for species cover for a habitat generalist
+[_*Acer rubrum*_ (Red maple)]
+and a habitat specialist [_*Abies fraseri*_ (Frasier fir)]. 
+Because this dataset includes both continuous and discrete explanatory
+variables use the function `Anova` in the packages `car`.
+
+
+Compare the p-values you observe using the function `Anova` to those generated using `summary`. 
+
+For each species address the following additional questions:
+
+    * how well does the exploratory model appear to explain cover?
+    * which explanatory variables are the most important?
+    * do model diagnostics indicate any problems with violations of
+      OLS assumptions?
+    * are you able to explain variance in one species better than         another?
+
+I started by subsetting the data into two dataframes (one for each species). I only selected the variables needed for the analysis.  See code below: 
+
+```{r tidy=TRUE}
+trees <- read.csv("../data/treedata_subset.csv")
+acer <- subset(trees, species == "Acer rubrum", select=c("cover", "elev", "tci", "streamdist", "disturb", "beers"))
+abies <- subset(trees, species == "Abies fraseri", select=c("cover", "elev", "tci", "streamdist", "disturb", "beers"))
+```
+
+Next I created models for both acer and abies with all of the variables (elevation, tci, streamdist, disturb, and beers).  I used the summary() function to get information about each model. I also used the Anova function for both models.  Finally, I plotted both models to check some of the assumptions.  See work below:
+
+```{r}
+library(car)
+mod_acer <- lm(cover ~ . , data=acer)
+summary(mod_acer)
+Anova(mod_acer)
+par(mfrow=c(2,2))
+plot(mod_acer)
+mod_abies <- lm(cover ~ . , data=abies)
+summary(mod_abies)
+Anova(mod_abies, type=3)
+par(mfrow=c(2,2))
+plot(mod_abies)
+```
+
+First, for acer rubrum, when looking at the summary of the model it appears that elevation, stream distance, and beers are potentially important in determining cover.  However, The adjusted R^2 is only 3.6%, which is very low.  So only 3.6% of the variance in cover is explained by the model.  When comparing the p-values from Anova() and summary() we get p-values almost equal with the exception of disturbance since summary separates out the levels of disturbance while Anova() doesn't.  Also, when examining the plots of the acer model we see some issues.  There appears to be some type of pattern in the residual vs. fitted plot which indicates that the variances are not equal.  Also, on the qqplot there are a few outliers, which means that data are not necessarily normal.  So, we may want to consider going another route for further analyses. 
+
+Next, for abies fraseri, when looking at the summary of the model it appears that elevation is the only variable important in determining the cover.  Furthermore, the adjsuted R^2 is 50%, which means 50% of the variance in cover is explained by the model. Once again, the Anova() function gives us similar p-values except that disturbance is not separated by factor.  Furthemore, when looking at the model plots we see some issues again.  There are definitely a few outliers based on the qqplot.  Also, based on the qqplot and the pattern on the residuals vs. fitted plot (more points on the right side) I am skeptical that the data are normal and the variances are equal. There also appears to be significant leverage for some of the points.  
+
+Based on the adjusted R^2 values we can describe more of the variance in cover for abies than for acer.  Only one variable (elevation) significantly effects cover for abies, while several variables are important for acer.  This makes since based on the fact that acer rubrum is a habitat generalist while abies fraseri is a habitat specialist.  
+
+2. You may have noticed that the variable cover is defined as 
+positive integers between 1 and 10. and is therefore better treated
+as a discrete rather than continuous variable. 
+Re-examine your solutions to the question above but from the
+perspective of a General Linear Model (GLM) with a Poisson error term
+(rather than a Gaussian one as in OLS). 
+The Poisson distribution generates integers 0 to positive infinity so this may provide a good first approximation.
+
+I created poisson glm's for both acer and abies and then I compared the glm to the ols models using aov. I also calculated the pseudo r^2 for both and plotted the models to look at the assumptions.  See the code below: 
+
+First for acer rubrum: 
+
+```{r}
+glm_acer <- glm(cover ~ . , data=acer, family ="poisson")
+summary(glm_acer)
+summary(mod_acer)
+psuedo_r2 <- function(glm_mod){
+  1-glm_mod$deviance/glm_mod$null.deviance
+}
+par(mfrow=c(2,2))
+plot(glm_acer)
+psuedo_r2(glm_acer)
+anova(mod_acer, glm_acer)
+```
+
+It appears that for the glm for acer elevation, streamdist, and beers are still important in determining cover. The pseudo R^2 is 3.99% which means the model explains about 4% of the variance in cover.  This is slightly higher than the adjusted R^2 for the OLS model. Furthermore, when looking at the plots of the glm the qqplot looks a little better than the qqplot for the OLS model. This leads me to believe this error distribution is a better fit for the data. When using the anova() function comparing the OLS and glm model we also see how much of a better fit the poisson model is than the gaussian model. The residual sums of squares is significantly lower for the glm than the lm, which means much more error is explained by the glm model. 
+
+Next for abies fraser, see code below: 
+
+```{r}
+glm_abies <- glm(cover ~ . , data=abies, family="poisson")
+summary(glm_abies)
+psuedo_r2(glm_abies)
+par(mfrow=c(2,2))
+plot(glm_abies)
+anova(mod_abies, glm_abies)
+```
+
+Once again for abies it appears that only elevation is important in determining cover even for the glm. The psuedo R^2 for the glm is 60.9% which means almost 61% of the variance in cover is explained by this model. This pseudo R^2 is almost 10% higher than the adjusted R^2 for the ols model, which means it is a better fit. However, when looking at the plots there doesn't appear to be much different between those for the OLS model and the glm model. This could be due to the small sample size for abies fraseri compared to acer rubrum. Finally, when using the anova() function to compare the OLS and glm model we see that the residual sums of squares is much lower for the glm model, which indicates that it is a much better fit. 
+
+
+3. Provide a plain English summary (i.e., no statistics) of what you have
+found and what conclusions we can take away from your analysis?
+
+Based on the analysis we can conclude some important things.  First, the error distribution for the data is most likely a poisson distrubtion rather than a gaussian distribution due to the lower residual sums of squares for the poisson. Also, it appears that our model is not very good at describing the variance in cover for acer rubrum, but is a good predictor of cover for abies fraseri based on the pseudo R^2.  In plain english, this tells us that none of the environmental variables are very good predictors in determining the cover of acer rubrum. This goes along with the fact that acer rubrum is a habitat generalist. That is, it can live in any habitat, which helps us understand why we couldn't determine any predictors of cover.  On the other hand, abies fraseri cover appears to be predicted by elevation. That is, as elevation increases so does abies fraseri cover. This corresponds with the fact that abies is a habitat specialist and we should only see high cover under very specific environmental condities (i.e. high elevation). We can further see the relationship of abies cover and elevation in the following plot: 
+
+```{r}
+par(mfrow=c(1,1))
+plot(cover~elev, data=abies)
+```
+
+
+4. (optional) Examine the behavior of the function `step()` using the 
+exploratory models developed above. This is a very simple and not very
+robust machine learning stepwise algorithm that uses AIC to select a 
+best model. By default it does a backward selection routine. 
+
+To use the step() function I start with the full glm poisson model for acer and abies.  See work below:
+
+```{r}
+step(glm_acer)
+step(glm_abies)
+```
+
+The step function runs through the model removing variables until the lowest AIC value is obtained. Based on this function the best model to describe cover of acer rubrum contains the following variables: elevation, tci, streamdist, and beers.  This is all of the variables except disturbance. This once again goes along with the fact that acer is a generalist. On the other hand, the step function tells us the best model to describe cover of abies contains only elevation and tci as variables. 
+
