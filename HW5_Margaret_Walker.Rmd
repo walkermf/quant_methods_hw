@@ -1,0 +1,111 @@
+---
+title: "HW5_MargaretWalker"
+author: "Margaret Walker"
+date: "February 21, 2016"
+output: pdf_document
+---
+
+## Spatial Modeling Assignment
+
+1) Examine if there is evidence of spatial dependence in a rare and a common
+species in the BCI tree dataset
+
+```{r}
+library(vegan)
+library(nlme)
+data(BCI)
+## UTM Coordinates (in metres)
+BCI_xy = data.frame(x = rep(seq(625754, 626654, by=100), each=5), 
+                    y = rep(seq(1011569,  1011969, by=100), len=50))
+bci_dat <- data.frame(BCI_xy, BCI)
+max_dist = max(BCI_xy) / 2
+```
+I chose *Inga acuminata* as my rare species because there were only 26 individuals for that species.  First, I plotted the abundance of *Inga acuminata*.  It looks like there are only a few areas with inga. I then used the mantel test to test whether there is spatial dependence in the data.  The mantel test returned a test statistic of 0.01753 and a significance of 0.414.  Due to the large significance value we can conclude that there is no relationship between the spatial distance and the abundance of *Inga acuminata*.  That is, there is no spatial dependence for the abundance of *Inga acuminata*. See code below: 
+```{r}
+plot(y~x, cex=Inga.acuminata, data=bci_dat)
+inga <- subset(BCI, select=Inga.acuminata)
+inga_dist <- dist(inga)
+xydist <- dist(BCI_xy)
+inga_mantel <- mantel(xydist, inga_dist)
+inga_mantel 
+```
+For my common species I chose *Socratea exorrhiza* because there were 346 individuals. Once again I started out by plotting the abundance of *Socratea exorrhiza*. The plot is kind of hard to interpret because of the size of the circles but it appears that all of the large circles are very close to one another. Next, I ran the mantel test on socratea. The mantel statistics came out to be 0.337 and the significance value was 0.001. Due to the significance value we can conclude that there is a significant relationship between the spatial distance and the abundance of *Socratea exorrhiza*. That is, there is spatial dependence in the abundance of *Socratea exorrhiza*.
+```{r}
+plot(y~x, cex=Socratea.exorrhiza, data=bci_dat)
+socratea <- subset(BCI, select=Socratea.exorrhiza)
+socratea_dist <- dist(socratea)
+socratea_mantel <- mantel(xydist, socratea_dist)
+socratea_mantel 
+```
+So, it appears that there is no spatial dependence for the rare species but there is for the common species.  This makes some sense becuase with the rare species there are fewer sites with that species compared to the common species. So, there are less chances for nearby sites to be similar.  
+
+2) Build two generalized linear models to predict the abundance of the species
+*Drypetes standleyi* using the abundance of other tree species in the study site.
+Specifically examine the following species as predictor variables:
+
+```{r}
+sp_ids = c("Cordia.lasiocalyx", "Hirtella.triandra",
+           "Picramnia.latifolia", "Quassia.amara",
+           "Tabernaemontana.arborea", "Trattinnickia.aspera", 
+           "Xylopia.macrantha", "Drypetes.standleyi")
+bci_sp <- subset(bci_dat, select=sp_ids)
+```
+
+* Model 1: only include a single species as a predictor variable
+
+* Model 2: include all of the species as predictor variables
+
+With both models examine the spatial dependence of the residuals using the 
+function `Variogram`. Model the spatial dependence in the residuals using one
+of the error structures available. 
+
+Starting with the single species model. I randomly chose *Quassia amara* to use as my single species to model the abundance of *Drypetes standleyi*. So, first I started out by creating the gls model and the variogram of the model without using one of the error structures. There appears to be spatial dependence in the residuals since there is a linear relationship on the variogram. Furthermore, the normalized residuals have a pattern. If there was no spatial dependence we would expect no pattern on the variogram.
+```{r}
+one_species <- gls(Drypetes.standleyi~Quassia.amara, data=bci_dat)
+summary(one_species)
+plot(Variogram(one_species, form=~x+y))
+plot(Variogram(one_species, resType='n'))
+```
+Since there appears to be spatial dependence I will try to use the exponential error model and see if that helps. The variogram of the normalized residuals look better, but not perfect. It does appear that modeling the error helps with the spatial dependence.  
+```{r}
+one_exp <-  gls(Drypetes.standleyi ~ Quassia.amara, data=bci_dat, 
+                corr=corExp(form=~x + y, nugget=T), 
+                control = glsControl(opt='optim',  msVerbose=T))
+summary(one_exp)
+plot(Variogram(one_exp,  maxDist=max_dist))
+plot(Variogram(one_exp, resType='n', maxDist = max_dist))
+anova(one_species, one_exp)
+```
+Furthermore, when looking at the coefficients, the intercept and beta coefficients changed slightly, and the p-values of the intercept and beta coefficient changed significantly. The correlation coefficient went from -0.179 in the original model to -0.009 in the model with the error structure. This leads me to believe there is less of a correlation between the two variables when the spatial dependnece is removed.  That is, most of the correlation before was due to the fact that closer sites are more related. Finally, when looking at the anova() function of the two models we see that the AIC value is significantly lower for the model with the error structure compared to the model with out. That is, the AIC value for the regular model is 337.5 while the model with the error structure is 302.1. So, it appears that the model with the error strucutre is a better overall fit than the model without it. 
+
+Now for the model with all of the species. Once again I started out by creating the model with all of the species and looking at the variogram of the residuals. There appears to be less spatial dependence in the model with all species than with the one species. I say this due to the fact that the variogram of the residuals has no real pattern. See code below: 
+
+```{r}
+all_species <- gls(Drypetes.standleyi~Quassia.amara + 
+                     Cordia.lasiocalyx + Hirtella.triandra + 
+                     Picramnia.latifolia + Tabernaemontana.arborea + 
+                     Trattinnickia.aspera + Xylopia.macrantha, data=bci_dat)
+summary(all_species)
+plot(Variogram(all_species, form = ~x+y))
+plot(Variogram(all_species, resType='n'))
+```
+However, I will use the exponential error structure once again to see how that effects the model with all of the species. There appears to be more of a pattern for the normalized residuals in the model with the error structure than without. That is, modeling the error structure had no positive impact on the spatial dependence of the model. 
+
+```{r}
+all_exp <- gls(Drypetes.standleyi~Quassia.amara + 
+                 Cordia.lasiocalyx + Hirtella.triandra + 
+                 Picramnia.latifolia + Tabernaemontana.arborea + 
+                 Trattinnickia.aspera + Xylopia.macrantha, 
+               data=bci_dat, corr=corExp(form = ~ x+y, nugget=T), 
+               control = glsControl(opt='optim', msVerbose=T))
+summary(all_exp)
+plot(Variogram(all_exp,  maxDist = max_dist))
+plot(Variogram(all_exp, resType='n', maxDist=max_dist))
+anova(all_species, all_exp)
+```
+Furthermore, when looking at the coefficients of the models, the intercept and beta coefficients did not change that significantly.  The correlation coefficients are hard to decipher since there is so many, but looking at them it doesn't appear that any change drastically.  And finally, when using the anova() function we see that the AIC values for the model with and without the error structure are pretty close together. Therefore, modeling the error structure didn't have a significant impact on the overall model fit.  
+
+So, in conclusion, it appears that the model with one species had significant spatial dependence while the model with all of the species did not.  Furthermore, using the exponential error structure in the one species model seemed to improve the overall model fit while that was not the case for the model with all of the species. So, with the one species model you are using only one species to model the abundance of the other. However, with the other model you are using multiple species to model the abundance of that one species. So, with the multiple species model there is less chance that any one site will be more related to the others since you are combining the abundance of all of the species. That is, having similar abundance of all of the different species in multiple sites is unlikely. In other words, in order for a sites to be similar you would have to have similar abundances for all of the species in the model which is less likely than with the single species model. On the other hand, with one species there is a much higher chance that nearby sites will have similar abundances.  
+
+When trying to use the shortcut for the model with all of the species I had a difficult time getting the variograms to work. The distances used for x and y did not seem right. So I wrote out the whole model from a dataframe with BCI and BCI_xy.
+
